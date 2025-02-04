@@ -8,16 +8,12 @@ import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.tag import pos_tag
 from nltk.corpus import wordnet, stopwords
+import pandas as pd
 
 class backendClass:
     def __init__(self, db_path="quickcram.db"):
         self.db_path = db_path
         self.setup_database()
-        nltk.download('punkt')
-        nltk.download('averaged_perceptron_tagger')
-        nltk.download('wordnet')
-        nltk.download('stopwords')
-        nltk.download('averaged_perceptron_tagger_eng')
 
     def setup_database(self):
         with self.get_db() as conn:
@@ -33,14 +29,6 @@ class backendClass:
                     userId INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     content TEXT NOT NULL,
-                    FOREIGN KEY (userId) REFERENCES User(userId) ON DELETE CASCADE
-                );
-
-                CREATE TABLE IF NOT EXISTS Flashcard (
-                    flashcardId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    userId INTEGER NOT NULL,
-                    front TEXT NOT NULL,
-                    back TEXT NOT NULL,
                     FOREIGN KEY (userId) REFERENCES User(userId) ON DELETE CASCADE
                 );
 
@@ -63,8 +51,19 @@ class backendClass:
                     FOREIGN KEY (userId) REFERENCES User(userId) ON DELETE CASCADE,
                     FOREIGN KEY (quizId) REFERENCES GeneratedQuiz(genQuizId) ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS Flashcard (
+                    cardId INTEGER PRIMARY KEY AUTOINCREMENT,
+                    userId INTEGER NOT NULL,
+                    front TEXT NOT NULL,
+                    back TEXT NOT NULL,
+                    FOREIGN KEY (userId) REFERENCES User(userId) ON DELETE CASCADE
+                );
+                
             ''')
-            conn.commit()  # Ensure changes are saved
+
+    def get_db(self):
+        return sqlite3.connect(self.db_path)
 
     def extract_text_from_pdf(self, pdf_file):
         reader = PyPDF2.PdfReader(pdf_file)
@@ -259,9 +258,6 @@ class backendClass:
             with self.get_db() as conn:
                 cursor = conn.execute('SELECT * FROM GeneratedQuiz WHERE userId = ?', (user_id,))
                 quizzes = cursor.fetchall()
-                if not quizzes:
-                    return []
-                    
                 formatted_quizzes = []
                 for q in quizzes:
                     try:
@@ -275,33 +271,44 @@ class backendClass:
                         })
                     except json.JSONDecodeError:
                         continue
-                return formatted_quizzes
+            
+                # Convert list to DataFrame
+                df = pd.DataFrame(formatted_quizzes)
+                return df if not df.empty else pd.DataFrame(columns=['genQuizId', 'userId', 'title', 'questions', 'pdfName'])
         except Exception as e:
             print(f"Error retrieving quizzes: {str(e)}")
-            return []
-
-    def save_quiz_attempt(self, user_id, quiz_id, score, total):
-        try:
-            with self.get_db() as conn:
-                conn.execute(
-                    'INSERT INTO QuizAttempt (userId, quizId, score, totalQuestions) VALUES (?, ?, ?, ?)',
-                    (user_id, quiz_id, score, total)
-                )
-                conn.commit()  # Ensure changes are saved
-                return True, "Score saved successfully"
-        except Exception as e:
-            return False, str(e)
+            return pd.DataFrame(columns=['genQuizId', 'userId', 'title', 'questions', 'pdfName'])
 
     def get_quiz_attempts(self, user_id):
         try:
             with self.get_db() as conn:
-                cursor = conn.execute('''
-                    SELECT a.*, g.title, g.pdfName 
-                    FROM QuizAttempt a 
-                    JOIN GeneratedQuiz g ON a.quizId = g.genQuizId 
-                    WHERE a.userId = ?
-                    ORDER BY a.attemptDate DESC
-                ''', (user_id,))
-                return cursor.fetchall()
+                query = '''
+                    SELECT 
+                        qa.attemptId,
+                        qa.score,
+                        qa.totalQuestions as total,
+                        qa.attemptDate,
+                        gq.title as quizTitle
+                    FROM QuizAttempt qa
+                    JOIN GeneratedQuiz gq ON qa.quizId = gq.genQuizId
+                    WHERE qa.userId = ?
+                '''
+                df = pd.read_sql_query(query, conn, params=(user_id,))
+                return df
         except Exception as e:
-            return []
+            print(f"[ERROR] Could not retrieve quiz attempts: {str(e)}")
+            return pd.DataFrame()
+
+    def save_quiz_attempt(self, user_id, quiz_id, score, total):
+        try:
+            with self.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'INSERT INTO QuizAttempt (userId, quizId, score, totalQuestions, attemptDate) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                    (user_id, quiz_id, score, total)
+                )
+                conn.commit()
+                return True, "Quiz attempt saved successfully"
+        except Exception as e:
+            print(f"[ERROR] Could not save quiz attempt: {str(e)}")
+            return False, str(e)
