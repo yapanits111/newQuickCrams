@@ -7,43 +7,37 @@ back = backendClass()
 def take_quiz(quiz):
     st.subheader(f"Taking Quiz: {quiz['title']}")
     questions = quiz['questions']
-    
-    if 'current_q' not in st.session_state:
-        st.session_state.current_q = 0
-        st.session_state.score = 0
-        
-    if st.session_state.current_q < len(questions):
-        q = questions[st.session_state.current_q]
-        st.write(f"Question {st.session_state.current_q + 1}/{len(questions)}")
+
+    if 'answers' not in st.session_state:
+        st.session_state.answers = {}
+
+    for i, q in enumerate(questions):
+        st.write(f"Question {i + 1}/{len(questions)}")
         st.write(q["question"])
-        
-        # Handle MCQ format
-        answer = st.radio("Choose your answer:", q["options"])
-        
-        if st.button("Submit Answer"):
-            if answer == q["answer"]:
-                st.session_state.score += 1
-                st.success("Correct!")
-            else:
-                st.error(f"Incorrect. The answer was: {q['answer']}")
-            
-            st.session_state.current_q += 1
-            
-            # Save quiz attempt when completed
-            if st.session_state.current_q >= len(questions):
-                back.save_quiz_attempt(
-                    st.session_state.user['id'],
-                    quiz['genQuizId'],
-                    st.session_state.score,
-                    len(questions)
-                )
-                st.success(f"Quiz completed! Score: {st.session_state.score}/{len(questions)}")
-                if st.button("Return to Quizzes"):
-                    del st.session_state.current_q
-                    del st.session_state.score
-                    st.rerun()
-            else:
-                st.rerun()
+        st.session_state.answers[i] = st.radio(f"Choose your answer for question {i + 1}:", q["options"], key=f"answer_{quiz['genQuizId']}_{i}")
+
+    submit_button = st.button("Submit Answers", key=f"submit_{quiz['genQuizId']}")
+
+    if submit_button:
+        score = 0
+        for i, q in enumerate(questions):
+            if st.session_state.answers[i] == q["answer"]:
+                score += 1
+
+        st.session_state.score = score
+        st.success(f"Quiz completed! Score: {score}/{len(questions)}")
+
+        back.save_quiz_attempt(
+            st.session_state.user['id'],
+            quiz['genQuizId'],
+            score,
+            len(questions)
+        )
+
+        if st.button("Return to Quizzes"):
+            del st.session_state.answers
+            del st.session_state.score
+            st.rerun()
 
 def quiz():
     st.title("📝 Quiz Application")
@@ -55,15 +49,18 @@ def quiz():
         
         if quizzes:
             for quiz in quizzes:
-                col1, col2 = st.columns([3,1])
-                with col1:
-                    st.subheader(quiz['title'])
-                with col2:
-                    if st.button("Take Quiz", key=f"take_{quiz['genQuizId']}"):
-                        take_quiz(quiz)
+                if st.button(f"Take Quiz: {quiz['title']}", key=f"take_{quiz['genQuizId']}"):
+                    st.session_state.current_quiz = quiz
+                    st.rerun()
+        
+        if 'current_quiz' in st.session_state:
+            take_quiz(st.session_state.current_quiz)
     
     with tab2:
         results = back.get_quiz_attempts(st.session_state.user['id'])
         if results:
             df = pd.DataFrame(results, columns=['ID', 'User', 'Quiz', 'Score', 'Total', 'Date', 'Title', 'PDF'])
-            st.dataframe(df[['Title', 'Score', 'Total', 'Date']])
+            st.dataframe(df[['Title', 'Score', 'Total', 'Date']], hide_index=True)
+
+if __name__ == "__main__":
+    quiz()

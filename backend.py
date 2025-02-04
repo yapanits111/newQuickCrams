@@ -17,7 +17,7 @@ class backendClass:
         nltk.download('averaged_perceptron_tagger')
         nltk.download('wordnet')
         nltk.download('stopwords')
-        nltk.download('averaged_perceptron_tagger_eng')  # Ensure this resource is downloaded
+        nltk.download('averaged_perceptron_tagger_eng')
 
     def setup_database(self):
         with self.get_db() as conn:
@@ -49,7 +49,7 @@ class backendClass:
                     userId INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     questions TEXT NOT NULL,
-                    pdfName TEXT NOT NULL,
+                    pdfName TEXT,
                     FOREIGN KEY (userId) REFERENCES User(userId) ON DELETE CASCADE
                 );
 
@@ -227,13 +227,12 @@ class backendClass:
     def delete_flashcard(self, card_id, user_id):
         try:
             with self.get_db() as conn:
-                conn.execute('DELETE FROM Flashcard WHERE flashcardId = ? AND userId = ?', (card_id, user_id))
+                conn.execute('DELETE * FROM Flashcard WHERE flashcardId = ? AND userId = ?', (card_id, user_id))
                 conn.commit()  # Ensure changes are saved
                 return True, "Flashcard deleted successfully"
         except Exception as e:
             return False, str(e)
 
-    # Quiz Management
     def save_generated_quiz(self, user_id, title, questions, pdf_name):
         try:
             formatted_questions = json.dumps([{
@@ -243,9 +242,6 @@ class backendClass:
                 'type': 'mcq'
             } for q in questions])
 
-            print(f"[DEBUG] Saving quiz: User ID={user_id}, Title={title}, PDF={pdf_name}")
-            print(f"[DEBUG] Questions: {formatted_questions}")
-
             with self.get_db() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
@@ -253,10 +249,9 @@ class backendClass:
                     (user_id, title, formatted_questions, pdf_name)
                 )
                 conn.commit()
-                print("[DEBUG] Quiz saved successfully")
                 return True, "Quiz saved successfully"
         except Exception as e:
-            print(f"[ERROR] Could not save quiz: {str(e)}")  # Debugging output
+            print(f"[ERROR] Could not save quiz: {str(e)}")
             return False, str(e)
 
     def get_generated_quizzes(self, user_id):

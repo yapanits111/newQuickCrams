@@ -14,9 +14,12 @@ def quizGenerator():
     if uploaded_file:
         text = back.extract_text_from_pdf(uploaded_file)
         
-        if st.button("Generate Quiz"):
+        with st.form(key='generate_quiz_form'):
+            num_questions = st.slider("Number of questions", 1, 10, 5)
+            generate_button = st.form_submit_button("Generate Quiz")
+        
+        if generate_button:
             with st.spinner("Generating quiz questions..."):
-                num_questions = st.slider("Number of questions", 1, 10, 5)
                 questions = back.generate_questions(text, num_questions)
             
             if questions:
@@ -30,29 +33,34 @@ def quizGenerator():
                         st.write(f"- {opt}")
                     with st.expander("Show Answer"):
                         st.write(q["answer"])
-                
-                # Save quiz section
-                title = st.text_input("Quiz Title")
+    
+    if st.session_state.questions:
+        with st.form(key='save_quiz_form'):
+            title = st.text_input("Quiz Title")
+            save_button = st.form_submit_button("Save Quiz")
+        
+        if save_button:
+            if "user" not in st.session_state or "id" not in st.session_state.user:
+                st.error("User session not found. Please log in again.")
+                return
 
-                if "user" not in st.session_state or "id" not in st.session_state.user:
-                    st.error("User session not found. Please log in again.")
-                    return
+            if title:
+                with st.spinner("Saving quiz to database..."):
+                    success, msg = back.save_generated_quiz(
+                        st.session_state.user['id'],
+                        title,
+                        st.session_state.questions,
+                        uploaded_file.name
+                    )
+                if success:
+                    st.success("Quiz saved successfully!")
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.error(f"Error saving quiz: {msg}")
+                    st.error("Please try again")
+            else:
+                st.error("Please enter a title")
 
-                if st.button("Save Quiz"):
-                    if title:
-                        with st.spinner("Saving quiz to database..."):
-                            success, msg = back.save_generated_quiz(
-                                st.session_state.user['id'],
-                                title,
-                                st.session_state.questions,
-                                uploaded_file.name
-                            )
-                        if success:
-                            st.success("Quiz saved successfully!")
-                            st.balloons()
-                            st.rerun()
-                        else:
-                            st.error(f"Error saving quiz: {msg}")
-                            st.error("Please try again")
-                    else:
-                        st.error("Please enter a title")
+if __name__ == "__main__":
+    quizGenerator()
