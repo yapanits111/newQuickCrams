@@ -92,6 +92,12 @@ def quiz():
     
         if not results.empty:
             st.subheader("Quiz Results")
+
+            #Legend
+            st.write("Legend:")
+            st.write("- Perfect: 100%")
+            st.write("- Passed: 75 to 99%")
+            st.write("- Study Harder: Below 75%")
         
             # Create a DataFrame from the results data
             df = results.copy()
