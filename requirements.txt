@@ -1,0 +1,9 @@
+java
+streamlit
+sqlite3
+hashlib
+json
+PyPDF2==3.0.1
+spacy
+pandas
+springboot
