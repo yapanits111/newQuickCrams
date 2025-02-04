@@ -244,13 +244,16 @@ class backendClass:
             } for q in questions])
 
             print(f"[DEBUG] Saving quiz: User ID={user_id}, Title={title}, PDF={pdf_name}")
+            print(f"[DEBUG] Questions: {formatted_questions}")
 
             with self.get_db() as conn:
-                conn.execute(
+                cursor = conn.cursor()
+                cursor.execute(
                     'INSERT INTO GeneratedQuiz (userId, title, questions, pdfName) VALUES (?, ?, ?, ?)',
                     (user_id, title, formatted_questions, pdf_name)
                 )
                 conn.commit()
+                print("[DEBUG] Quiz saved successfully")
                 return True, "Quiz saved successfully"
         except Exception as e:
             print(f"[ERROR] Could not save quiz: {str(e)}")  # Debugging output
