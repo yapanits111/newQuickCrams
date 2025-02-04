@@ -304,7 +304,7 @@ class backendClass:
                         qa.attemptDate,
                         gq.title as quizTitle
                     FROM QuizAttempt qa
-                    JOIN GeneratedQuiz gq ON qa.quizId = gq.genQuizId 
+                    INNER JOIN GeneratedQuiz gq ON qa.quizId = gq.genQuizId 
                     WHERE qa.userId = ?
                     ORDER BY qa.attemptDate DESC
                 ''', (user_id,))

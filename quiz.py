@@ -37,9 +37,6 @@ def take_quiz(quiz):
 
         st.session_state.score = score
         
-        # Add debug print
-        st.write(f"Debug - Saving quiz attempt: user={st.session_state.user['id']}, quiz={quiz['genQuizId']}, score={score}, total={len(questions)}")
-        
         success, message = back.save_quiz_attempt(
             st.session_state.user['id'],
             quiz['genQuizId'],
@@ -89,8 +86,12 @@ def quiz():
     
     with tab2:
         results = back.get_quiz_attempts(st.session_state.user['id'])
-    
-        if not results.empty:
+        
+        # Convert list to DataFrame if needed
+        if isinstance(results, list):
+            results = pd.DataFrame(results, columns=['attemptId', 'score', 'totalQuestions', 'attemptDate', 'quizTitle'])
+        
+        if len(results) > 0:  # Check length instead of .empty
             st.subheader("Quiz Results")
 
             #Legend
@@ -102,7 +103,7 @@ def quiz():
             # Create a DataFrame from the results data
             df = results.copy()
             df.columns = ['Attempt ID', 'Score', 'Total', 'Date', 'Quiz']
-        
+            
             # Calculate percentage and grade
             df['Percentage'] = (df['Score'] / df['Total']) * 100
             df['Grade'] = df.apply(
@@ -111,7 +112,7 @@ def quiz():
                 else 'Study Harder',
                 axis=1
             )
-        
+            
             # Display DataFrame
             st.dataframe(
                 df[['Quiz', 'Score', 'Total', 'Date', 'Grade']], 
@@ -121,6 +122,3 @@ def quiz():
             )
         else:
             st.info("No quiz attempts found")
-
-if __name__ == "__main__":
-    quiz()
