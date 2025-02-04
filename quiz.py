@@ -65,20 +65,24 @@ def quiz():
     with tab1:
         quizzes = back.get_generated_quizzes(st.session_state.user['id'])
         
-        if len(quizzes) > 0:  # Check if DataFrame has rows
+        # Convert list to DataFrame if needed
+        if isinstance(quizzes, list):
+            quizzes = pd.DataFrame(quizzes)
+        
+        if not quizzes.empty:
             st.subheader("Available Quizzes")
-            quizzes_display = quizzes[['title', 'pdfName']]
-            quizzes_display.columns = ['Title', 'PDF Name']
-            quizzes_display.reset_index(drop=True, inplace=True)
+            quizzes_display = pd.DataFrame({
+                'Title': quizzes['title'],
+                'PDF Name': quizzes['pdfName']
+            })
             
-            if len(quizzes_display) > 0:
-                selected_quiz = st.selectbox("Select a Quiz", quizzes_display['Title'].tolist())
+            selected_quiz = st.selectbox("Select a Quiz", quizzes_display['Title'].tolist())
 
-                if st.button("Take Selected Quiz"):
-                    selected_quiz_row = quizzes[quizzes['title'] == selected_quiz]
-                    if len(selected_quiz_row) > 0:
-                        st.session_state.current_quiz = selected_quiz_row.iloc[0]
-                        st.rerun()
+            if st.button("Take Selected Quiz"):
+                selected_quiz_row = quizzes[quizzes['title'] == selected_quiz]
+                if not selected_quiz_row.empty:
+                    st.session_state.current_quiz = selected_quiz_row.iloc[0]
+                    st.rerun()
         
         if 'current_quiz' in st.session_state:
             take_quiz(st.session_state.current_quiz)
@@ -86,32 +90,31 @@ def quiz():
     with tab2:
         results = back.get_quiz_attempts(st.session_state.user['id'])
     
-        # Debug print
-        st.write(f"Number of quiz attempts: {len(results)}")
-    
-        if len(results) > 0:
+        if not results.empty:
             st.subheader("Quiz Results")
         
             # Create a DataFrame from the results data
             df = results.copy()
             df.columns = ['Attempt ID', 'Score', 'Total', 'Date', 'Quiz']
         
-            # Calculate percentage for grading
+            # Calculate percentage and grade
             df['Percentage'] = (df['Score'] / df['Total']) * 100
             df['Grade'] = df.apply(
-                lambda row: 'Excellent' if row['Score'] == row['Total']
+                lambda row: 'Perfect' if row['Score'] == row['Total']
                 else 'Passed' if row['Percentage'] >= 75
                 else 'Study Harder',
                 axis=1
             )
         
-        # Display DataFrame
-        st.dataframe(
-            df[['Quiz', 'Score', 'Total', 'Date', 'Grade']], 
-            height=600, 
-            width=1000,
-            hide_index=True
-        )
+            # Display DataFrame
+            st.dataframe(
+                df[['Quiz', 'Score', 'Total', 'Date', 'Grade']], 
+                height=600, 
+                width=1000,
+                hide_index=True
+            )
+        else:
+            st.info("No quiz attempts found")
 
 if __name__ == "__main__":
     quiz()

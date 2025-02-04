@@ -14,6 +14,11 @@ class backendClass:
     def __init__(self, db_path="quickcram.db"):
         self.db_path = db_path
         self.setup_database()
+        nltk.download('punkt')
+        nltk.download('averaged_perceptron_tagger')
+        nltk.download('wordnet')
+        nltk.download('stopwords')
+        nltk.download('averaged_perceptron_tagger_eng')
 
     def setup_database(self):
         with self.get_db() as conn:
@@ -29,6 +34,14 @@ class backendClass:
                     userId INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     content TEXT NOT NULL,
+                    FOREIGN KEY (userId) REFERENCES User(userId) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS Flashcard (
+                    flashcardId INTEGER PRIMARY KEY AUTOINCREMENT,
+                    userId INTEGER NOT NULL,
+                    front TEXT NOT NULL,
+                    back TEXT NOT NULL,
                     FOREIGN KEY (userId) REFERENCES User(userId) ON DELETE CASCADE
                 );
 
@@ -51,19 +64,8 @@ class backendClass:
                     FOREIGN KEY (userId) REFERENCES User(userId) ON DELETE CASCADE,
                     FOREIGN KEY (quizId) REFERENCES GeneratedQuiz(genQuizId) ON DELETE CASCADE
                 );
-
-                CREATE TABLE IF NOT EXISTS Flashcard (
-                    cardId INTEGER PRIMARY KEY AUTOINCREMENT,
-                    userId INTEGER NOT NULL,
-                    front TEXT NOT NULL,
-                    back TEXT NOT NULL,
-                    FOREIGN KEY (userId) REFERENCES User(userId) ON DELETE CASCADE
-                );
-                
             ''')
-
-    def get_db(self):
-        return sqlite3.connect(self.db_path)
+            conn.commit()  # Ensure changes are saved
 
     def extract_text_from_pdf(self, pdf_file):
         reader = PyPDF2.PdfReader(pdf_file)
@@ -258,6 +260,9 @@ class backendClass:
             with self.get_db() as conn:
                 cursor = conn.execute('SELECT * FROM GeneratedQuiz WHERE userId = ?', (user_id,))
                 quizzes = cursor.fetchall()
+                if not quizzes:
+                    return []
+                    
                 formatted_quizzes = []
                 for q in quizzes:
                     try:
@@ -271,18 +276,27 @@ class backendClass:
                         })
                     except json.JSONDecodeError:
                         continue
-            
-                # Convert list to DataFrame
-                df = pd.DataFrame(formatted_quizzes)
-                return df if not df.empty else pd.DataFrame(columns=['genQuizId', 'userId', 'title', 'questions', 'pdfName'])
+                return formatted_quizzes
         except Exception as e:
             print(f"Error retrieving quizzes: {str(e)}")
-            return pd.DataFrame(columns=['genQuizId', 'userId', 'title', 'questions', 'pdfName'])
+            return []
+
+    def save_quiz_attempt(self, user_id, quiz_id, score, total):
+        try:
+            with self.get_db() as conn:
+                conn.execute(
+                    'INSERT INTO QuizAttempt (userId, quizId, score, totalQuestions) VALUES (?, ?, ?, ?)',
+                    (user_id, quiz_id, score, total)
+                )
+                conn.commit()  # Ensure changes are saved
+                return True, "Score saved successfully"
+        except Exception as e:
+            return False, str(e)
 
     def get_quiz_attempts(self, user_id):
         try:
             with self.get_db() as conn:
-                query = '''
+                cursor = conn.execute('''
                     SELECT 
                         qa.attemptId,
                         qa.score,
@@ -290,50 +304,13 @@ class backendClass:
                         qa.attemptDate,
                         gq.title as quizTitle
                     FROM QuizAttempt qa
-                    INNER JOIN GeneratedQuiz gq ON qa.quizId = gq.genQuizId
+                    JOIN GeneratedQuiz gq ON qa.quizId = gq.genQuizId 
                     WHERE qa.userId = ?
                     ORDER BY qa.attemptDate DESC
-                '''
-                # Debug print
-                print(f"Fetching quiz attempts for user: {user_id}")
-            
-                df = pd.read_sql_query(query, conn, params=(user_id,))
-            
-                # Debug print
-                print(f"Retrieved {len(df)} quiz attempts")
-                print(f"DataFrame columns: {df.columns}")
-                print(f"DataFrame content:\n{df}")
-            
+                ''', (user_id,))
+                results = cursor.fetchall()
+                df = pd.DataFrame(results, columns=['attemptId', 'score', 'totalQuestions', 'attemptDate', 'quizTitle'])
                 return df
         except Exception as e:
-            print(f"[ERROR] Could not retrieve quiz attempts: {str(e)}")
+            print(f"Error retrieving quiz attempts: {str(e)}")
             return pd.DataFrame()
-
-    def save_quiz_attempt(self, user_id, quiz_id, score, total):
-        try:
-            with self.get_db() as conn:
-                cursor = conn.cursor()
-            
-                # Debug print
-                print(f"Saving quiz attempt: {user_id}, {quiz_id}, {score}, {total}")
-            
-                cursor.execute(
-                    '''INSERT INTO QuizAttempt 
-                    (userId, quizId, score, totalQuestions, attemptDate) 
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)''',
-                    (user_id, quiz_id, score, total)
-                )
-                conn.commit()
-            
-                # Verify insertion
-                cursor.execute(
-                    'SELECT * FROM QuizAttempt WHERE userId=? AND quizId=? ORDER BY attemptId DESC LIMIT 1',
-                    (user_id, quiz_id)
-                )
-                result = cursor.fetchone()
-                print(f"Verification - Inserted record: {result}")
-            
-                return True, "Quiz attempt saved successfully"
-        except Exception as e:
-            print(f"[ERROR] Could not save quiz attempt: {str(e)}")
-            return False, str(e)
