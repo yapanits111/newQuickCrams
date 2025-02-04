@@ -286,14 +286,24 @@ class backendClass:
                     SELECT 
                         qa.attemptId,
                         qa.score,
-                        qa.totalQuestions as total,
+                        qa.totalQuestions,
                         qa.attemptDate,
                         gq.title as quizTitle
                     FROM QuizAttempt qa
-                    JOIN GeneratedQuiz gq ON qa.quizId = gq.genQuizId
+                    INNER JOIN GeneratedQuiz gq ON qa.quizId = gq.genQuizId
                     WHERE qa.userId = ?
+                    ORDER BY qa.attemptDate DESC
                 '''
+                # Debug print
+                print(f"Fetching quiz attempts for user: {user_id}")
+            
                 df = pd.read_sql_query(query, conn, params=(user_id,))
+            
+                # Debug print
+                print(f"Retrieved {len(df)} quiz attempts")
+                print(f"DataFrame columns: {df.columns}")
+                print(f"DataFrame content:\n{df}")
+            
                 return df
         except Exception as e:
             print(f"[ERROR] Could not retrieve quiz attempts: {str(e)}")
@@ -303,11 +313,26 @@ class backendClass:
         try:
             with self.get_db() as conn:
                 cursor = conn.cursor()
+            
+                # Debug print
+                print(f"Saving quiz attempt: {user_id}, {quiz_id}, {score}, {total}")
+            
                 cursor.execute(
-                    'INSERT INTO QuizAttempt (userId, quizId, score, totalQuestions, attemptDate) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                    '''INSERT INTO QuizAttempt 
+                    (userId, quizId, score, totalQuestions, attemptDate) 
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)''',
                     (user_id, quiz_id, score, total)
                 )
                 conn.commit()
+            
+                # Verify insertion
+                cursor.execute(
+                    'SELECT * FROM QuizAttempt WHERE userId=? AND quizId=? ORDER BY attemptId DESC LIMIT 1',
+                    (user_id, quiz_id)
+                )
+                result = cursor.fetchone()
+                print(f"Verification - Inserted record: {result}")
+            
                 return True, "Quiz attempt saved successfully"
         except Exception as e:
             print(f"[ERROR] Could not save quiz attempt: {str(e)}")

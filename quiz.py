@@ -36,14 +36,21 @@ def take_quiz(quiz):
                 score += 1
 
         st.session_state.score = score
-        st.success(f"Quiz completed! Score: {score}/{len(questions)}")
-
-        back.save_quiz_attempt(
+        
+        # Add debug print
+        st.write(f"Debug - Saving quiz attempt: user={st.session_state.user['id']}, quiz={quiz['genQuizId']}, score={score}, total={len(questions)}")
+        
+        success, message = back.save_quiz_attempt(
             st.session_state.user['id'],
             quiz['genQuizId'],
             score,
             len(questions)
         )
+        
+        if success:
+            st.success(f"Quiz completed! Score: {score}/{len(questions)}")
+        else:
+            st.error(f"Failed to save quiz result: {message}")
 
         if st.button("Return to Quizzes"):
             del st.session_state.answers
@@ -78,31 +85,33 @@ def quiz():
     
     with tab2:
         results = back.get_quiz_attempts(st.session_state.user['id'])
+    
+        # Debug print
+        st.write(f"Number of quiz attempts: {len(results)}")
+    
         if len(results) > 0:
             st.subheader("Quiz Results")
-
-            st.write("Legend:")
-            st.write("Excellent: 100%", color="green")
-            st.write("Passed: 75 - 99%", color="yellow")
-            st.write("Study Harder: below 75%", color="red")
-
+        
             # Create a DataFrame from the results data
-            df = results.copy()  # Create a copy to avoid modifying original
-            df.columns = ['Attempt ID', 'Score', 'Total', 'Date', 'Quiz']  # Rename columns
-            df['Conclusion'] = df.apply(
-                lambda row: 'Excellent' if row['Score'] == row['Total'] 
-                else 'Passed' if row['Score'] >= 0.75 * row['Total'] 
-                else 'Study Harder', 
+            df = results.copy()
+            df.columns = ['Attempt ID', 'Score', 'Total', 'Date', 'Quiz']
+        
+            # Calculate percentage for grading
+            df['Percentage'] = (df['Score'] / df['Total']) * 100
+            df['Grade'] = df.apply(
+                lambda row: 'Excellent' if row['Score'] == row['Total']
+                else 'Passed' if row['Percentage'] >= 75
+                else 'Study Harder',
                 axis=1
             )
-            
-            # Display the DataFrame
-            st.dataframe(
-                df[['Quiz', 'Score', 'Total', 'Date', 'Conclusion']], 
-                height=600, 
-                width=1000,
-                hide_index=True 
-            )
+        
+        # Display DataFrame
+        st.dataframe(
+            df[['Quiz', 'Score', 'Total', 'Date', 'Grade']], 
+            height=600, 
+            width=1000,
+            hide_index=True
+        )
 
 if __name__ == "__main__":
     quiz()
