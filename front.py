@@ -1,5 +1,5 @@
 import streamlit as st
-from dashboard import dashboard
+import dashboard
 from backend import backendClass
 
 back = backendClass()
@@ -13,7 +13,7 @@ def mainPage():
         st.session_state.logged_in = False
 
     if st.session_state.logged_in:
-        dashboard()
+        dashboard.dashboard()
     else:
         auth_tabs()
 
